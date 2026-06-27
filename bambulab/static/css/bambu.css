@@ -1,0 +1,42 @@
+.printer-card {
+  transition: box-shadow 0.2s ease;
+}
+.printer-card:hover {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
+}
+
+.state-badge {
+  white-space: nowrap;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.conn-dot {
+  display: inline-block;
+  transition: background-color 0.3s ease;
+}
+
+.thermometer-track {
+  overflow: hidden;
+}
+.thermometer-fill {
+  transition: width 0.5s ease;
+}
+
+.print-progress {
+  transition: opacity 0.3s ease;
+}
+
+.filament-card {
+  cursor: default;
+}
+
+.color-swatch {
+  display: inline-block;
+}
+
+.remaining-bar-track {
+  overflow: hidden;
+}
+.remaining-bar-fill {
+  transition: width 0.3s ease;
+}

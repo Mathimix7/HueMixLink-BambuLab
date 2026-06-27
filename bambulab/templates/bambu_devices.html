@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+{% block title %}Display Devices - Bambu Lab{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('bambu_printer.static', filename='css/bambu.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-4xl pb-1 font-bold bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent mb-1">
+                    Display Devices
+                </h1>
+                <p class="text-gray-600">Manage paired Bambu Lab display devices</p>
+            </div>
+            <div class="flex items-center space-x-3">
+                <a href="{{ url_for('bambu_printer.index') }}" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors inline-flex items-center">
+                    <i class="fas fa-print mr-2"></i>Printers
+                </a>
+                <a href="{{ url_for('bambu_printer.settings_page') }}" class="px-4 py-2 bg-zinc-500 text-white rounded-lg hover:bg-zinc-600 transition-colors inline-flex items-center">
+                    <i class="fas fa-cog mr-2"></i>Settings
+                </a>
+                <a href="/" class="px-4 py-2 bg-zinc-500 text-white rounded-lg hover:bg-zinc-600 transition-colors inline-flex items-center">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Home
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Devices List -->
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-semibold text-gray-800">
+                <i class="fas fa-desktop mr-2 text-purple-600"></i>Paired Displays
+            </h2>
+            <button id="refresh-btn" onclick="refreshDevices()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center">
+                <i id="refresh-icon" class="fas fa-sync-alt mr-2 transition-transform duration-500"></i>Refresh
+            </button>
+        </div>
+
+        <!-- Devices Table -->
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MAC Address</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Battery</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="devices-table-body" class="bg-white divide-y divide-gray-200">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Rename Modal -->
+<div id="rename-modal" class="hidden fixed z-50 inset-0 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeRenameModal()"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    <i class="fas fa-edit mr-2 text-purple-600"></i>Rename Device
+                </h3>
+                <div class="mt-2">
+                    <input type="hidden" id="rename-mac">
+                    <label for="rename-name" class="block text-sm font-medium text-gray-700">Display Name</label>
+                    <input type="text" id="rename-name" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-purple-500 focus:border-purple-500">
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="button" onclick="submitRename()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-purple-600 text-base font-medium text-white hover:bg-purple-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                    Save
+                </button>
+                <button type="button" onclick="closeRenameModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settings-modal" class="hidden fixed z-50 inset-0 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeSettingsModal()"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    <i class="fas fa-cog mr-2 text-purple-600"></i>Display Settings
+                </h3>
+                <div class="mt-2">
+                    <input type="hidden" id="settings-mac">
+                    <label for="settings-printer" class="block text-sm font-medium text-gray-700">Linked Printer</label>
+                    <select id="settings-printer" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-purple-500 focus:border-purple-500">
+                        <option value="">— No printer —</option>
+                        {% for printer in printers %}
+                        <option value="{{ printer.id }}">{{ printer.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-gray-500 mt-2">Select which printer this display should show status for.</p>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="button" onclick="submitSettings()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-purple-600 text-base font-medium text-white hover:bg-purple-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                    Save
+                </button>
+                <button type="button" onclick="closeSettingsModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="hidden fixed z-50 inset-0 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeDeleteModal()"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <i class="fas fa-exclamation-triangle text-red-600"></i>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Delete Device</h3>
+                        <div class="mt-2">
+                            <input type="hidden" id="delete-mac">
+                            <p class="text-sm text-gray-500">Are you sure you want to delete "<span id="delete-device-name" class="font-semibold text-gray-900"></span>"? This action cannot be undone.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="button" onclick="confirmDelete()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                    Delete
+                </button>
+                <button type="button" onclick="closeDeleteModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let displays = [];
+
+// ── Load & Render ──
+
+function loadDevices() {
+    showDevicesSkeleton();
+
+    fetch('{{ url_for("bambu_printer.api_displays") }}')
+        .then(response => response.json())
+        .then(data => {
+            displays = (data && data.displays) || [];
+            renderDevices();
+        })
+        .catch(err => console.error('Error loading displays:', err));
+}
+
+function showDevicesSkeleton() {
+    const tbody = document.getElementById('devices-table-body');
+    tbody.innerHTML = '';
+    for (let i = 0; i < 3; i++) {
+        const row = document.createElement('tr');
+        row.className = 'animate-pulse';
+        row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap">
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-gray-200 rounded mr-2"></div>
+                    <div class="h-4 bg-gray-200 rounded w-32"></div>
+                </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <div class="h-4 bg-gray-200 rounded w-40"></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <div class="flex items-center space-x-2">
+                    <div class="w-4 h-4 bg-gray-200 rounded"></div>
+                    <div class="h-4 bg-gray-200 rounded w-12"></div>
+                </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <div class="h-5 bg-gray-200 rounded-full w-24"></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <div class="flex space-x-2">
+                    <div class="h-4 bg-gray-200 rounded w-16"></div>
+                    <div class="h-4 bg-gray-200 rounded w-20"></div>
+                    <div class="h-4 bg-gray-200 rounded w-16"></div>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    }
+}
+
+function renderDevices() {
+    const tbody = document.getElementById('devices-table-body');
+    tbody.innerHTML = '';
+
+    if (displays.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                    <p class="text-lg">No display devices paired</p>
+                    <p class="text-sm mt-1">Pair a display device through the ESP-NOW network to see it here.</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    displays.forEach(display => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-50';
+        row.dataset.mac = display.mac;
+
+        // Device Name cell
+        const nameCell = document.createElement('td');
+        nameCell.className = 'px-6 py-4 whitespace-nowrap';
+        const nameWrap = document.createElement('div');
+        nameWrap.className = 'flex items-center';
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-desktop mr-2 text-purple-500 flex-shrink-0';
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'text-sm font-medium text-gray-900';
+        nameSpan.textContent = display.name;
+        nameWrap.appendChild(icon);
+        nameWrap.appendChild(nameSpan);
+        nameCell.appendChild(nameWrap);
+
+        // MAC Address cell
+        const macCell = document.createElement('td');
+        macCell.className = 'px-6 py-4 whitespace-nowrap';
+        const macSpan = document.createElement('span');
+        macSpan.className = 'text-sm text-gray-500 font-mono';
+        macSpan.textContent = display.mac;
+        macCell.appendChild(macSpan);
+
+        // Battery cell
+        const batteryCell = document.createElement('td');
+        batteryCell.className = 'px-6 py-4 whitespace-nowrap';
+        if (display.battery_percent !== undefined && display.battery_percent !== null) {
+            const batteryWrap = document.createElement('div');
+            batteryWrap.className = 'flex items-center space-x-2 battery-tooltip';
+
+            let lastUpdatedText = 'Never';
+            if (display.last_seen) {
+                const lastUpdate = new Date(display.last_seen);
+                lastUpdatedText = lastUpdate.toLocaleString();
+            }
+
+            const tooltipContent = document.createElement('div');
+            tooltipContent.className = 'tooltip-content';
+            tooltipContent.innerHTML = `<div><strong>Voltage:</strong> ${display.battery_mv || 'N/A'} mV</div><div><strong>Updated:</strong> ${lastUpdatedText}</div>`;
+
+            const batteryIcon = document.createElement('i');
+            let iconClass, textColor;
+            if (display.battery_percent >= 60) {
+                iconClass = 'fa-battery-full';
+                textColor = 'text-green-600';
+            } else if (display.battery_percent >= 20) {
+                iconClass = 'fa-battery-half';
+                textColor = 'text-yellow-600';
+            } else {
+                iconClass = 'fa-battery-quarter';
+                textColor = 'text-red-600';
+            }
+            batteryIcon.className = `fas ${iconClass} ${textColor}`;
+
+            const batteryText = document.createElement('span');
+            batteryText.className = `text-sm font-medium ${textColor}`;
+            batteryText.textContent = `${display.battery_percent}%`;
+
+            batteryWrap.appendChild(batteryIcon);
+            batteryWrap.appendChild(batteryText);
+            batteryWrap.appendChild(tooltipContent);
+            batteryCell.appendChild(batteryWrap);
+        } else {
+            const naSpan = document.createElement('span');
+            naSpan.className = 'text-sm text-gray-400 flex items-center space-x-2';
+            naSpan.innerHTML = '<i class="fas fa-battery-empty text-gray-400"></i><span>N/A</span>';
+            batteryCell.appendChild(naSpan);
+        }
+
+        // Status cell
+        const statusCell = document.createElement('td');
+        statusCell.className = 'px-6 py-4 whitespace-nowrap';
+        const statusSpan = document.createElement('span');
+        if (display.printer_id) {
+            statusSpan.className = 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 items-center';
+            statusSpan.innerHTML = '<i class="fas fa-check-circle mr-1"></i> Configured';
+        } else {
+            statusSpan.className = 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800 items-center';
+            statusSpan.innerHTML = '<i class="fas fa-circle mr-1"></i> Not Configured';
+        }
+        statusCell.appendChild(statusSpan);
+
+        // Actions cell
+        const actionsCell = document.createElement('td');
+        actionsCell.className = 'px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2';
+
+        const renameBtn = document.createElement('button');
+        renameBtn.className = 'text-purple-600 hover:text-purple-900 inline-flex items-center';
+        renameBtn.innerHTML = '<i class="fas fa-edit mr-1"></i> Rename';
+        renameBtn.addEventListener('click', () => openRenameModal(display.mac, display.name));
+
+        const settingsBtn = document.createElement('button');
+        settingsBtn.className = 'text-green-600 hover:text-green-900 inline-flex items-center';
+        settingsBtn.innerHTML = '<i class="fas fa-cog mr-1"></i> Settings';
+        settingsBtn.addEventListener('click', () => openSettingsModal(display.mac, display.printer_id || ''));
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'text-red-600 hover:text-red-900 inline-flex items-center';
+        deleteBtn.innerHTML = '<i class="fas fa-trash mr-1"></i> Delete';
+        deleteBtn.addEventListener('click', () => deleteDisplay(display.mac, display.name));
+
+        actionsCell.appendChild(renameBtn);
+        actionsCell.appendChild(settingsBtn);
+        actionsCell.appendChild(deleteBtn);
+
+        row.appendChild(nameCell);
+        row.appendChild(macCell);
+        row.appendChild(batteryCell);
+        row.appendChild(statusCell);
+        row.appendChild(actionsCell);
+        tbody.appendChild(row);
+    });
+}
+
+function refreshDevices() {
+    const refreshIcon = document.getElementById('refresh-icon');
+    refreshIcon.classList.add('rotate-360');
+    setTimeout(() => {
+        refreshIcon.classList.remove('rotate-360');
+    }, 500);
+    loadDevices();
+}
+
+// ── Rename ──
+
+let renameMac = null;
+
+function openRenameModal(mac, name) {
+    renameMac = mac;
+    document.getElementById('rename-mac').value = mac;
+    document.getElementById('rename-name').value = name;
+    document.getElementById('rename-modal').classList.remove('hidden');
+}
+
+function closeRenameModal() {
+    document.getElementById('rename-modal').classList.add('hidden');
+    renameMac = null;
+}
+
+async function submitRename() {
+    const name = document.getElementById('rename-name').value.trim();
+    if (!name) return;
+    const res = await fetch('{{ url_for("bambu_printer.api_rename_display", mac="__mac__") }}'.replace('__mac__', renameMac), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (data.success) {
+        closeRenameModal();
+        refreshDevices();
+    } else {
+        alert(data.error || 'Failed to rename');
+    }
+}
+
+// ── Settings ──
+
+let settingsMac = null;
+
+function openSettingsModal(mac, printerId) {
+    settingsMac = mac;
+    document.getElementById('settings-mac').value = mac;
+    document.getElementById('settings-printer').value = printerId || '';
+    document.getElementById('settings-modal').classList.remove('hidden');
+}
+
+function closeSettingsModal() {
+    document.getElementById('settings-modal').classList.add('hidden');
+    settingsMac = null;
+}
+
+async function submitSettings() {
+    const printer_id = document.getElementById('settings-printer').value || null;
+    const res = await fetch('{{ url_for("bambu_printer.api_display_settings", mac="__mac__") }}'.replace('__mac__', settingsMac), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ printer_id }),
+    });
+    const data = await res.json();
+    if (data.success) {
+        closeSettingsModal();
+        refreshDevices();
+    } else {
+        alert(data.error || 'Failed to save settings');
+    }
+}
+
+// ── Delete ──
+
+let deleteMac = null;
+
+function deleteDisplay(mac, name) {
+    deleteMac = mac;
+    document.getElementById('delete-mac').value = mac;
+    document.getElementById('delete-device-name').textContent = name;
+    document.getElementById('delete-modal').classList.remove('hidden');
+}
+
+function closeDeleteModal() {
+    document.getElementById('delete-modal').classList.add('hidden');
+    deleteMac = null;
+}
+
+async function confirmDelete() {
+    const res = await fetch('{{ url_for("bambu_printer.api_remove_display", mac="__mac__") }}'.replace('__mac__', deleteMac), {
+        method: 'DELETE',
+    });
+    const data = await res.json();
+    if (data.success) {
+        closeDeleteModal();
+        refreshDevices();
+    } else {
+        alert(data.error || 'Failed to delete');
+    }
+}
+
+// ── Init ──
+
+document.addEventListener('DOMContentLoaded', loadDevices);
+</script>
+{% endblock %}

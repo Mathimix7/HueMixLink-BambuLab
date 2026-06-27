@@ -1,0 +1,38 @@
+{
+    "id": "bambu_printer",
+    "plugin_id": "0a6fd132-1043-4737-a7ee-6dcf81c81997",
+    "module": "plugins.bambu_printer.plugin",
+    "enabled": true,
+    "version": "1.0.0",
+    "plugin_api_version": 1,
+    "devices": [
+        {
+            "device_type": 1,
+            "name": "Bambu Display",
+            "type": "Display",
+            "icon": "\ud83d\udda5\ufe0f"
+        }
+    ],
+    "ota": [
+        {
+            "device_type": 1,
+            "name": "bambu_display"
+        }
+    ],
+    "metadata": {
+        "author": "Mathimix",
+        "license": "MIT"
+    },
+    "home_box": {
+        "name": "Bambu Lab Printers",
+        "description": "Monitor 3D printer status",
+        "icon": "fa-print",
+        "color": "#00a86b",
+        "link": "/plugins/bambu"
+    },
+    "device_capabilities": {
+        "rename_endpoint": "/plugins/bambu/api/displays/{device_id}/rename",
+        "delete_endpoint": "/plugins/bambu/api/displays/{device_id}",
+        "configure_endpoint": "/plugins/bambu/devices"
+    }
+}

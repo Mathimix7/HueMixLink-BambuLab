@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}Bambu Printer Settings - HueMix-Link{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('bambu_printer.static', filename='css/bambu.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-4xl pb-1 font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent mb-1">
+                    Printer Settings
+                </h1>
+                <p class="text-gray-600">Manage your Bambu Lab printer connections</p>
+            </div>
+            <div class="flex items-center space-x-3">
+                <a href="{{ url_for('bambu_printer.index') }}" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors inline-flex items-center">
+                    <i class="fas fa-print mr-2"></i>Printers
+                </a>
+                <a href="{{ url_for('bambu_printer.devices_page') }}" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center">
+                    <i class="fas fa-desktop mr-2"></i>Devices
+                </a>
+                <a href="/" class="px-4 py-2 bg-zinc-500 text-white rounded-lg hover:bg-zinc-600 transition-colors inline-flex items-center">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Home
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+            <i class="fas fa-plus-circle mr-2 text-emerald-600"></i>Add Printer
+        </h2>
+        <form id="add-printer-form" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="printer-name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <input type="text" id="printer-name" placeholder="e.g. Workshop X1C" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+                <div>
+                    <label for="printer-ip" class="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
+                    <input type="text" id="printer-ip" placeholder="192.168.1.200" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+                <div>
+                    <label for="printer-serial" class="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
+                    <input type="text" id="printer-serial" placeholder="AC12309BH109" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+                <div>
+                    <label for="printer-access-code" class="block text-sm font-medium text-gray-700 mb-1">Access Code</label>
+                    <input type="password" id="printer-access-code" placeholder="12347890" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+            </div>
+            <div class="flex justify-end">
+                <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors inline-flex items-center">
+                    <i class="fas fa-plus mr-2"></i>Add Printer
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+            <i class="fas fa-list mr-2 text-emerald-600"></i>Configured Printers
+        </h2>
+        <div id="printer-list" class="space-y-3">
+            {% if printers %}
+            {% for printer in printers %}
+            <div class="printer-entry flex items-center justify-between p-4 rounded-lg border border-gray-200" data-printer-id="{{ printer.id }}">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                        <i class="fas fa-print text-emerald-600"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium text-gray-900">{{ printer.name }}</p>
+                        <p class="text-sm text-gray-500">{{ printer.ip }} · {{ printer.serial }}</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="editPrinter('{{ printer.id }}', '{{ printer.name }}', '{{ printer.ip }}', '{{ printer.serial }}', '{{ printer.access_code }}')" class="px-3 py-1.5 text-sm text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors">
+                        <i class="fas fa-edit mr-1"></i>Edit
+                    </button>
+                    <button onclick="removePrinter('{{ printer.id }}')" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        <i class="fas fa-trash mr-1"></i>Remove
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="text-gray-500 text-center py-8">No printers configured yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Edit Printer Modal -->
+    <div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-edit mr-2 text-emerald-600"></i>Edit Printer
+            </h2>
+            <form id="edit-printer-form" class="space-y-4">
+                <input type="hidden" id="edit-printer-id">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="edit-printer-name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                        <input type="text" id="edit-printer-name" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label for="edit-printer-ip" class="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
+                        <input type="text" id="edit-printer-ip" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label for="edit-printer-serial" class="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
+                        <input type="text" id="edit-printer-serial" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label for="edit-printer-access-code" class="block text-sm font-medium text-gray-700 mb-1">Access Code</label>
+                        <input type="password" id="edit-printer-access-code" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500">
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-zinc-100 text-gray-700 rounded-lg hover:bg-zinc-200 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors inline-flex items-center">
+                        <i class="fas fa-save mr-2"></i>Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('bambu_printer.static', filename='js/bambu.js') }}"></script>
+<script>
+    document.getElementById('add-printer-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('printer-name').value.trim();
+        const ip = document.getElementById('printer-ip').value.trim();
+        const serial = document.getElementById('printer-serial').value.trim();
+        const access_code = document.getElementById('printer-access-code').value.trim();
+
+        if (!ip || !serial || !access_code) {
+            alert('IP, serial, and access code are required');
+            return;
+        }
+
+        const res = await fetch('{{ url_for("bambu_printer.api_add_printer") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, ip, serial, access_code }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.error || 'Failed to add printer');
+        }
+    });
+
+    function editPrinter(id, name, ip, serial, accessCode) {
+        document.getElementById('edit-printer-id').value = id;
+        document.getElementById('edit-printer-name').value = name;
+        document.getElementById('edit-printer-ip').value = ip;
+        document.getElementById('edit-printer-serial').value = serial;
+        document.getElementById('edit-printer-access-code').value = accessCode;
+        document.getElementById('edit-modal').classList.remove('hidden');
+        document.getElementById('edit-modal').classList.add('flex');
+    }
+
+    function closeEditModal() {
+        document.getElementById('edit-modal').classList.add('hidden');
+        document.getElementById('edit-modal').classList.remove('flex');
+    }
+
+    document.getElementById('edit-printer-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('edit-printer-id').value;
+        const name = document.getElementById('edit-printer-name').value.trim();
+        const ip = document.getElementById('edit-printer-ip').value.trim();
+        const serial = document.getElementById('edit-printer-serial').value.trim();
+        const access_code = document.getElementById('edit-printer-access-code').value.trim();
+
+        if (!ip || !serial || !access_code) {
+            alert('IP, serial, and access code are required');
+            return;
+        }
+
+        const res = await fetch('{{ url_for("bambu_printer.api_update_printer", printer_id="__id__") }}'.replace('__id__', id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, ip, serial, access_code }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.error || 'Failed to update printer');
+        }
+    });
+
+    // Close modal on backdrop click
+    document.getElementById('edit-modal')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeEditModal();
+    });
+
+    async function removePrinter(printerId) {
+        if (!confirm('Remove this printer?')) return;
+        const res = await fetch('{{ url_for("bambu_printer.api_remove_printer", printer_id="__id__") }}'.replace('__id__', printerId), {
+            method: 'DELETE',
+        });
+        const data = await res.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.error || 'Failed to remove printer');
+        }
+    }
+</script>
+{% endblock %}
