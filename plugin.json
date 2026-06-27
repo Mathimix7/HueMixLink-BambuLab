@@ -3,7 +3,7 @@
     "plugin_id": "0a6fd132-1043-4737-a7ee-6dcf81c81997",
     "module": "plugins.bambu_printer.plugin",
     "enabled": true,
-    "version": "1.0.0",
+    "version": "1.0.1",
     "plugin_api_version": 1,
     "devices": [
         {
