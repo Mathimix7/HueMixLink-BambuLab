@@ -336,11 +336,10 @@ void renderClock() {
     // Hour hand (short, thick)
     drawRoundedHand(d, cx, cy, ha, r * 0.38, 2, 0xFFFF);
     drawRoundedHand(d, cx, cy, ma, r * 0.62, 1, 0xFFFF);
-    drawRoundedHand(d, cx, cy, sa, r * 0.78, 0, 0xF800);
-
-    // Center cap
+    // Center cap 
     d.fillCircle(cx, cy, 3, 0xFFFF);
     d.fillCircle(cx, cy, 1, TFT_BLACK);
+    drawRoundedHand(d, cx, cy, sa, r * 0.78, 0, 0xF800);
   };
 
   if (spr_ok) {
@@ -369,9 +368,9 @@ void renderClock() {
     }
     drawRoundedHand(tft, cx, cy, ha, r * 0.38, 2, 0xFFFF);
     drawRoundedHand(tft, cx, cy, ma, r * 0.62, 1, 0xFFFF);
-    drawRoundedHand(tft, cx, cy, sa, r * 0.78, 0, 0xF800);
     tft.fillCircle(cx, cy, 3, 0xFFFF);
     tft.fillCircle(cx, cy, 1, TFT_BLACK);
+    drawRoundedHand(tft, cx, cy, sa, r * 0.78, 0, 0xF800);
   }
 }
 
