@@ -139,6 +139,7 @@ bool breathingActive = false;
 // Button state
 unsigned long btnHoldStart = 0;
 unsigned long lastTapTime = 0;
+unsigned long lastTapRelease = 0;
 int tapCount = 0;
 
 unsigned long ledTimer = 0;
@@ -974,28 +975,31 @@ void loop() {
       lastActivityTime = now;
     }
 
-    // Double-tap → OTA mode
-    if (button.released() && tapCount >= 2) {
-      Serial.println("[OTA] Double-tap detected! Entering OTA mode...");
-      otaState = OTA_WAITING_NOTIFY;
-      ota_mode = true;
-      ota_wake_time = millis();
-      lastActivityTime = millis();
-      tapCount = 0;
-      ledBlink(3, 200);
-      sendOtaReady();
+    if (button.released()) {
+      if (tapCount >= 2) {
+        // Double-tap → OTA mode
+        Serial.println("[OTA] Double-tap detected! Entering OTA mode...");
+        otaState = OTA_WAITING_NOTIFY;
+        ota_mode = true;
+        ota_wake_time = millis();
+        lastActivityTime = millis();
+        tapCount = 0;
+        ledBlink(3, 200);
+        sendOtaReady();
+      } else if (millis() - btnHoldStart >= HOLD_TO_SLEEP_MS) {
+        // Hold 2s+ → deep sleep
+        goToSleep();
+      } else {
+        // Single tap: defer action — wait for possible second tap
+        lastTapRelease = millis();
+      }
     }
 
-    // Single tap (quick release) → send hello to re-register
-    if (button.released() && tapCount < 2 && millis() - btnHoldStart < HOLD_TO_SLEEP_MS) {
+    // Single-tap timeout: if no second tap within DOUBLE_TAP_MS, send hello
+    if (tapCount == 1 && millis() - lastTapRelease > DOUBLE_TAP_MS && !button.isPressed()) {
       sendHello();
       triggerLed(50);
       tapCount = 0;
-    }
-
-    // Hold 2s+ then release → deep sleep
-    if (button.released() && tapCount < 2 && millis() - btnHoldStart >= HOLD_TO_SLEEP_MS) {
-      goToSleep();
     }
 
     // Hold 5s+ (continuous, no release) → factory reset
