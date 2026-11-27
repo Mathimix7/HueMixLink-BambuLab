@@ -6,6 +6,7 @@
 // --- CONFIGURATION ---
 #define HUEMIXLINK_CHANNEL 1       
 #define MAX_GATEWAYS       10      
+#define PAIR_WINDOW_MS     30000UL // Accept PKT_PAIR_CONFIRM only within 30s of unpaired HELLO
 #define SERIAL_START       0xFE    
 #define SERIAL_END         0xFD
 #define SERIAL_HANDSHAKE   0x11    
@@ -22,6 +23,8 @@ enum PacketType {
   PKT_SCENE_DATA   = 0x03, 
   PKT_SYS_CMD      = 0x04, 
   PKT_GW_LIST_UPD  = 0x05, 
+  PKT_PAIR_ACK     = 0x06,
+  PKT_KEY_DISTRIB  = 0x07,
 
   PKT_HELLO        = 0x10, 
   PKT_BTN_EVENT    = 0x11, 
@@ -29,6 +32,7 @@ enum PacketType {
   PKT_DELIVERY_RPT = 0x13,
   PKT_MOTION_EVENT = 0x14, 
   PKT_DOOR_EVENT   = 0x15,
+  PKT_D12_EVENT    = 0x16,
 
   PKT_OTA_NOTIFY   = 0x20,
   PKT_OTA_READY    = 0x21,
@@ -54,6 +58,7 @@ enum PacketType {
 #define DEV_REMOTE  4
 #define DEV_MOTION  5
 #define DEV_DOOR    6
+#define DEV_D12     7
 
 // --- ACTION CODES ---
 #define ACT_CLICK        1
@@ -63,6 +68,7 @@ enum PacketType {
 #define ACT_MOTION_DETECTED  10
 #define ACT_DOOR_OPENED      11
 #define ACT_DOOR_CLOSED      12
+#define ACT_D12_FACE_UP      13
 
 // --- PLATFORM/BATTERY FLAGS (packed in payload platform byte) ---
 #define PLATFORM_FLAG_ESP8266         0x01
@@ -115,6 +121,17 @@ typedef struct {
   uint8_t version_patch;
   uint8_t platform;  // 0=ESP32, 1=ESP8266
 } Payload_Door;
+
+typedef struct {
+  uint8_t action;  // ACT_D12_FACE_UP
+  uint16_t battery_mv;
+  uint8_t face;         // Physical die face 1-12 (0 = unknown/edge)
+  uint8_t confidence;   // Dot-product match quality scaled to 0-255
+  uint8_t version_major;
+  uint8_t version_minor;
+  uint8_t version_patch;
+  uint8_t platform;  // 0=ESP32, 1=ESP8266
+} Payload_D12;
 
 typedef struct {
   uint8_t count;
@@ -171,6 +188,7 @@ typedef struct {
     Payload_Button      btn;
     Payload_Motion      motion;
     Payload_Door        door;
+    Payload_D12         d12;
     Payload_GatewayList gwList;
     Payload_Report      report;
     Payload_SysCmd      sys;
@@ -184,10 +202,69 @@ typedef struct {
   
 } HueMixLinkPacket;
 
+// --- SECURITY V2 PROTOCOL CONSTANTS & STRUCTURES ---
+#define PROTO_VERSION_V1         0x01
+#define PROTO_VERSION_V2         0x02
+#define V2_HEADER_SIZE           22
+#define V2_AAD_SIZE              21    // Header bytes 0..20 (excludes rssi)
+#define V2_TAG_SIZE              16
+#define V2_NONCE_SIZE            12    // srcMAC(6) || counter(4) || key_epoch(2)
+#define V2_OVERHEAD              38    // 22 + 16
+#define V2_MIN_FRAME_SIZE        39    // 38 + 1
+#define V2_FORBIDDEN_LEN         203   // Reserved for v1
+#define V2_MAX_FRAME_ESP8266     250
+#define V2_MAX_FRAME_ESP32       1470
+#define V2_PAIR_CONFIRM_LEN      151
+#define V2_COUNTER_RESERVE       100
+#define V2_HELLO_FLAG_HAS_PIN    0x01
+#define V2_HELLO_CAP_LEN         44
+
+// Security v2 OTA/Migration System Commands (PKT_SYS_CMD)
+#ifndef CMD_FACTORY_RESET
+#define CMD_FACTORY_RESET        0xFF
+#endif
+#define CMD_UPGRADE_TO_V2        0x60
+#define CMD_SET_PIN              0x61
+#define CMD_SET_PIN_ACK          0x62
+#define PIN_ACK_OK               0x01
+#define PIN_ACK_ALREADY_SET      0x02
+#define PIN_ACK_INVALID          0x03
+
+typedef struct {
+  uint8_t  type;
+  uint8_t  version;         // 0x02
+  uint8_t  sourceMAC[6];
+  uint8_t  targetMAC[6];
+  uint8_t  msgID;
+  uint32_t counter;         // Sender monotonic TX counter (LE)
+  uint16_t key_epoch;       // Rekey generation (LE)
+  uint8_t  rssi;            // Gateway-written RX RSSI (excluded from AAD)
+} HueMixLinkHeaderV2;
+
+typedef struct {
+  uint16_t chunk_index;
+  uint16_t data_len;        // Supports >255 B chunks on ESP-NOW v2
+} Payload_OtaChunkV2Header;
+
+typedef struct {
+  uint16_t count;           // Supports >255 LEDs on ESP-NOW v2
+  uint8_t  brightness;
+} Payload_LightV2Header;
+
+typedef struct {
+  uint8_t  pub_B[32];
+  uint8_t  nonce_B[8];
+  uint32_t newHomeID;
+  uint8_t  assignedDeviceID;
+  uint16_t key_epoch;
+  uint8_t  proof_B[32];
+  uint8_t  wrap[50];        // AES-GCM(K_own[16] || K_ack[16] || epoch[2]) + 16 B tag
+} Payload_PairConfirmV2;
+
 #pragma pack(pop) 
 
 // --- SECURITY HELPER ---
-uint32_t calculateHash(uint8_t* data, size_t len, uint32_t homeID) {
+inline uint32_t calculateHash(uint8_t* data, size_t len, uint32_t homeID) {
   uint32_t hash = 2166136261u;
   
   // Mix 4 bytes of HomeID (Little Endian)

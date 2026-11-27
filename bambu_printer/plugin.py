@@ -433,6 +433,25 @@ class BambuPrinterPlugin:
             gateway_radio_mac = payload.get('gateway_radio_mac')
             self._handle_display_request(source_mac, gateway_radio_mac, payload)
 
+    def _send_display_packet(self, ns, display_mac: str, data_packet: bytes, gateway_preference: str | None = None) -> None:
+        """Send a PKT_BAMBU_DISPLAY packet using Security v2 when available (with v1 fallback)."""
+        if hasattr(ns, 'send_packet_to_device'):
+            threading.Thread(
+                target=ns.send_packet_to_device,
+                args=(display_mac, PKT_BAMBU_DISPLAY, data_packet),
+                kwargs={'wait_for_delivery': True, 'gateway_preference': gateway_preference},
+                daemon=True,
+            ).start()
+            return
+        msg_id = ns.get_message_id()
+        full_packet = self._build_packet(ns, display_mac, data_packet, msg_id)
+        threading.Thread(
+            target=ns.send_raw_packet_to_device,
+            args=(display_mac, full_packet),
+            kwargs={'wait_for_delivery': True, 'msg_id': msg_id, 'gateway_preference': gateway_preference},
+            daemon=True,
+        ).start()
+
     def _handle_display_request(self, display_mac: str, gateway_radio_mac: str | None, pkt_payload: dict[str, Any]):
         kwargs: dict[str, Any] = {'last_seen_gateway': gateway_radio_mac}
         raw = pkt_payload.get('payload', b'')
@@ -461,14 +480,7 @@ class BambuPrinterPlugin:
             return
         try:
             data_packet = self._encode_display_data(st, connected=connected)
-            msg_id = ns.get_message_id()
-            full_packet = self._build_packet(ns, display_mac, data_packet, msg_id)
-            threading.Thread(
-                target=ns.send_raw_packet_to_device,
-                args=(display_mac, full_packet),
-                kwargs={'wait_for_delivery': True, 'msg_id': msg_id, 'gateway_preference': gateway_radio_mac},
-                daemon=True,
-            ).start()
+            self._send_display_packet(ns, display_mac, data_packet, gateway_preference=gateway_radio_mac)
             self._log(f'Sent status to display {display_mac} on request')
         except Exception as e:
             self._log(f'Failed to respond to display request from {display_mac}: {e}')
@@ -481,14 +493,7 @@ class BambuPrinterPlugin:
         try:
             mac = display['mac']
             gateway = display.get('last_seen_gateway')
-            msg_id = ns.get_message_id()
-            full_packet = self._build_packet(ns, mac, data_packet, msg_id)
-            threading.Thread(
-                target=ns.send_raw_packet_to_device,
-                args=(mac, full_packet),
-                kwargs={'wait_for_delivery': True, 'msg_id': msg_id, 'gateway_preference': gateway},
-                daemon=True,
-            ).start()
+            self._send_display_packet(ns, mac, data_packet, gateway_preference=gateway)
         except Exception as e:
             self._log(f'Failed to send to display {mac}: {e}')
 
@@ -612,8 +617,19 @@ class BambuPrinterPlugin:
 
     def api_remove_display(self, mac: str):
         displays = self._load_displays()
+        deleted = next((d for d in displays if d['mac'] == mac), None)
         displays = [d for d in displays if d['mac'] != mac]
         self._save_displays(displays)
+        ns = self._get_network_server()
+        if ns is not None and hasattr(ns, 'revoke_device'):
+            try:
+                ns.revoke_device(
+                    mac,
+                    keep_pin=True,
+                    last_name=(deleted.get('name') if deleted else None),
+                )
+            except Exception as e:
+                self._log(f'Failed to revoke Security v2 trust for display {mac}: {e}')
         return jsonify({'success': True})
 
     def api_bind_display(self, mac: str):
